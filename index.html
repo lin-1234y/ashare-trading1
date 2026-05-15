@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>A股交易记录分析工具</title>
+    <meta name="theme-color" content="#10242d" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="A股交易" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">A</span>
+          <div>
+            <h1>A股交易分析</h1>
+            <p>手动记账 · FIFO复盘</p>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-button active" data-view="dashboard">总览</button>
+          <button class="nav-button" data-view="trade-form">新增交易</button>
+          <button class="nav-button" data-view="positions">持仓</button>
+          <button class="nav-button" data-view="records">交易记录</button>
+          <button class="nav-button" data-view="settings">设置</button>
+        </nav>
+
+        <div class="sidebar-card">
+          <span>核算规则</span>
+          <strong>FIFO先进先出</strong>
+          <p>费用按设置自动计算，卖出按最早买入批次结转成本。</p>
+        </div>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Trading Journal</p>
+            <h2 id="page-title">总览</h2>
+          </div>
+          <div class="topbar-actions">
+            <button class="ghost-button" id="sample-data">填充示例</button>
+            <button class="primary-button" data-jump="trade-form">新增交易</button>
+          </div>
+        </header>
+
+        <section class="view active" id="dashboard">
+          <div class="metric-grid six">
+            <article class="metric">
+              <span>总资产</span>
+              <strong id="metric-assets">¥0.00</strong>
+            </article>
+            <article class="metric">
+              <span>总收益率</span>
+              <strong id="metric-total-return">0.00%</strong>
+            </article>
+            <article class="metric">
+              <span>现金</span>
+              <strong id="metric-cash">¥0.00</strong>
+            </article>
+            <article class="metric">
+              <span>持仓市值</span>
+              <strong id="metric-market-value">¥0.00</strong>
+            </article>
+            <article class="metric">
+              <span>持仓成本</span>
+              <strong id="metric-cost">¥0.00</strong>
+            </article>
+            <article class="metric">
+              <span>浮动盈亏</span>
+              <strong id="metric-floating">¥0.00</strong>
+            </article>
+            <article class="metric">
+              <span>FIFO已实现盈亏</span>
+              <strong id="metric-realized">¥0.00</strong>
+            </article>
+          </div>
+
+          <div class="panel-grid">
+            <section class="panel">
+              <div class="panel-header">
+                <h3>收益构成</h3>
+                <span id="summary-count">0 笔交易</span>
+              </div>
+              <div class="bar-chart" id="profit-bars"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <h3>复盘提示</h3>
+              </div>
+              <ul class="insight-list" id="insights"></ul>
+            </section>
+          </div>
+
+          <section class="panel spacing-top">
+            <div class="panel-header">
+              <div>
+                <h3>各股低买高卖盈亏</h3>
+                <span>支持先买后卖、先卖后买，不使用初始持仓成本</span>
+              </div>
+              <div class="date-filter">
+                <label>
+                  开始
+                  <input type="date" id="pair-start-date" />
+                </label>
+                <label>
+                  结束
+                  <input type="date" id="pair-end-date" />
+                </label>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>代码</th>
+                    <th>名称</th>
+                    <th>已配对数量</th>
+                    <th>买入成本</th>
+                    <th>卖出收入</th>
+                    <th>实现盈亏</th>
+                    <th>平均买价</th>
+                    <th>平均卖价</th>
+                    <th>未配对买入</th>
+                    <th>未配对卖出</th>
+                  </tr>
+                </thead>
+                <tbody id="trade-pair-pnl-body"></tbody>
+              </table>
+            </div>
+            <div class="mobile-list" id="trade-pair-pnl-cards"></div>
+          </section>
+        </section>
+
+        <section class="view" id="trade-form">
+          <form class="form-panel" id="trade-entry-form">
+            <input type="hidden" id="editing-id" />
+            <div class="form-title">
+              <h3 id="form-heading">新增交易</h3>
+              <button type="button" class="ghost-button small" id="reset-form">清空</button>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                交易日期
+                <input type="date" id="trade-date" required />
+              </label>
+              <label>
+                证券代码
+                <input type="text" id="symbol" placeholder="例如 600519" required maxlength="12" />
+              </label>
+              <label>
+                证券名称
+                <input type="text" id="name" placeholder="例如 贵州茅台" required />
+              </label>
+              <label>
+                买卖方向
+                <select id="side" required>
+                  <option value="buy">买入</option>
+                  <option value="sell">卖出</option>
+                </select>
+              </label>
+              <label>
+                成交价格
+                <input type="number" id="price" min="0" step="0.001" required />
+              </label>
+              <label>
+                成交数量
+                <input type="number" id="quantity" min="1" step="1" required />
+              </label>
+              <label>
+                佣金（自动）
+                <input type="number" id="commission" readonly />
+              </label>
+              <label>
+                印花税（自动）
+                <input type="number" id="stamp-tax" readonly />
+              </label>
+              <label>
+                过户费（自动）
+                <input type="number" id="transfer-fee" readonly />
+              </label>
+              <label class="wide">
+                备注
+                <input type="text" id="note" placeholder="例如 突破买入、止损卖出、计划外交易" />
+              </label>
+            </div>
+
+            <div class="quote-box">
+              <span>成交金额 <strong id="preview-amount">¥0.00</strong></span>
+              <span>总费用 <strong id="preview-fee">¥0.00</strong></span>
+              <span>现金变化 <strong id="preview-net">¥0.00</strong></span>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="primary-button" id="save-trade">保存交易</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="view" id="positions">
+          <section class="panel">
+            <div class="panel-header">
+              <h3>当前持仓</h3>
+              <span>当前价可手动修改，成本来自初始持仓和FIFO剩余批次</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>代码</th>
+                    <th>名称</th>
+                    <th>数量</th>
+                    <th>平均成本</th>
+                    <th>持仓成本</th>
+                    <th>当前价</th>
+                    <th>市值</th>
+                    <th>浮动盈亏</th>
+                    <th>收益率</th>
+                    <th>FIFO已实现</th>
+                  </tr>
+                </thead>
+                <tbody id="positions-body"></tbody>
+              </table>
+            </div>
+            <div class="mobile-list" id="positions-cards"></div>
+          </section>
+        </section>
+
+        <section class="view" id="records">
+          <section class="panel">
+            <div class="panel-header">
+              <h3>交易记录</h3>
+              <label class="search-box">
+                <span>筛选</span>
+                <input type="search" id="record-filter" placeholder="代码 / 名称 / 备注" />
+              </label>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th>代码</th>
+                    <th>名称</th>
+                    <th>方向</th>
+                    <th>价格</th>
+                    <th>数量</th>
+                    <th>金额</th>
+                    <th>佣金</th>
+                    <th>印花税</th>
+                    <th>过户费</th>
+                    <th>FIFO盈亏</th>
+                    <th>备注</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="records-body"></tbody>
+              </table>
+            </div>
+            <div class="mobile-list" id="records-cards"></div>
+          </section>
+        </section>
+
+        <section class="view" id="settings">
+          <div class="panel-grid">
+            <section class="panel">
+              <div class="panel-header">
+                <h3>账户初始值</h3>
+              </div>
+              <div class="form-grid compact">
+                <label>
+                  初始现金
+                  <input type="number" id="initial-cash" min="0" step="0.01" />
+                </label>
+              </div>
+              <div class="form-actions">
+                <button class="primary-button" id="save-account" type="button">保存账户设置</button>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <h3>费用设置</h3>
+                <span>费率按成交金额计算，例如万2.5填 0.00025</span>
+              </div>
+              <div class="form-grid compact">
+                <label>
+                  佣金费率
+                  <input type="number" id="commission-rate" min="0" step="0.00001" />
+                </label>
+                <label>
+                  最低佣金
+                  <input type="number" id="min-commission" min="0" step="0.01" />
+                </label>
+                <label>
+                  印花税率（仅卖出）
+                  <input type="number" id="stamp-rate" min="0" step="0.00001" />
+                </label>
+                <label>
+                  过户费率
+                  <input type="number" id="transfer-rate" min="0" step="0.00001" />
+                </label>
+              </div>
+              <div class="form-actions">
+                <button class="primary-button" id="save-fees" type="button">保存费用设置</button>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel spacing-top">
+            <div class="panel-header">
+              <h3>初始持仓</h3>
+              <span>用于录入开始使用工具之前已经持有的股票</span>
+            </div>
+            <div class="form-grid">
+              <label>
+                代码
+                <input type="text" id="initial-symbol" maxlength="12" placeholder="例如 600519" />
+              </label>
+              <label>
+                名称
+                <input type="text" id="initial-name" placeholder="例如 贵州茅台" />
+              </label>
+              <label>
+                数量
+                <input type="number" id="initial-quantity" min="1" step="1" />
+              </label>
+              <label>
+                总成本
+                <input type="number" id="initial-cost" min="0" step="0.01" />
+              </label>
+              <label>
+                当前价
+                <input type="number" id="initial-price" min="0" step="0.001" />
+              </label>
+              <label>
+                建仓日期
+                <input type="date" id="initial-date" />
+              </label>
+            </div>
+            <div class="form-actions">
+              <button class="primary-button" id="add-initial-position" type="button">添加初始持仓</button>
+            </div>
+            <div class="table-wrap spacing-top">
+              <table>
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th>代码</th>
+                    <th>名称</th>
+                    <th>数量</th>
+                    <th>总成本</th>
+                    <th>平均成本</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="initial-positions-body"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <div class="panel-grid spacing-top">
+            <section class="panel">
+              <div class="panel-header">
+                <h3>数据导出</h3>
+              </div>
+              <p class="panel-copy">导出 JSON 后可以作为备份，换浏览器或换电脑时再导入。</p>
+              <div class="stack-actions">
+                <button class="primary-button" id="export-data">导出数据</button>
+                <label class="file-button">
+                  导入数据
+                  <input type="file" id="import-data" accept="application/json" />
+                </label>
+              </div>
+            </section>
+
+            <section class="panel danger-zone">
+              <div class="panel-header">
+                <h3>清空数据</h3>
+              </div>
+              <p class="panel-copy">会删除当前浏览器里保存的所有交易、初始持仓、现金和当前价。</p>
+              <button class="danger-button" id="clear-data">清空全部</button>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+        });
+      }
+    </script>
+  </body>
+</html>

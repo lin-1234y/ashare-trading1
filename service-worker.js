@@ -1,4 +1,4 @@
-const CACHE_NAME = "ashare-trading-journal-v1";
+const CACHE_NAME = "ashare-trading-journal-v3";
 const ASSETS = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const ASSETS = [
   "./app.js",
   "./manifest.webmanifest",
   "./icon.svg",
+  "./reset-cache.html",
 ];
 
 self.addEventListener("install", (event) => {

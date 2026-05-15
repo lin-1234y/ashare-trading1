@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>刷新A股交易工具缓存</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #f5f7fb;
+        color: #17202a;
+        font-family: "Microsoft YaHei", system-ui, sans-serif;
+      }
+      main {
+        width: min(420px, calc(100vw - 32px));
+        padding: 22px;
+        border: 1px solid #d9e1ea;
+        border-radius: 10px;
+        background: #ffffff;
+        box-shadow: 0 18px 45px rgba(30, 48, 70, 0.08);
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 22px;
+      }
+      p {
+        color: #697586;
+        line-height: 1.7;
+      }
+      button,
+      a {
+        min-height: 42px;
+        border-radius: 8px;
+        border: 0;
+        padding: 0 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #176b87;
+        color: #ffffff;
+        text-decoration: none;
+        font: inherit;
+      }
+      #status {
+        color: #18805f;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>刷新缓存</h1>
+      <p>这个操作只刷新网页程序缓存，不会删除你手机里已保存的交易数据。</p>
+      <p id="status">准备刷新</p>
+      <button id="reset">刷新缓存</button>
+      <a href="./index.html" id="back" style="display: none; margin-top: 12px">返回工具</a>
+    </main>
+    <script>
+      async function resetCache() {
+        document.querySelector("#status").textContent = "正在刷新...";
+        if ("serviceWorker" in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map((reg) => reg.unregister()));
+        }
+        if ("caches" in window) {
+          const names = await caches.keys();
+          await Promise.all(names.map((name) => caches.delete(name)));
+        }
+        document.querySelector("#status").textContent = "缓存已刷新，请返回工具";
+        document.querySelector("#back").style.display = "inline-flex";
+      }
+      document.querySelector("#reset").addEventListener("click", resetCache);
+    </script>
+  </body>
+</html>

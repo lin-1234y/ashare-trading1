@@ -317,8 +317,9 @@
           <section class="panel spacing-top">
             <div class="panel-header">
               <h3>初始持仓</h3>
-              <span>用于录入开始使用工具之前已经持有的股票</span>
+              <span id="initial-position-mode">用于录入开始使用工具之前已经持有的股票</span>
             </div>
+            <input type="hidden" id="editing-initial-id" />
             <div class="form-grid">
               <label>
                 代码
@@ -347,6 +348,7 @@
             </div>
             <div class="form-actions">
               <button class="primary-button" id="add-initial-position" type="button">添加初始持仓</button>
+              <button class="ghost-button" id="reset-initial-position" type="button">清空</button>
             </div>
             <div class="table-wrap spacing-top">
               <table>
@@ -358,6 +360,7 @@
                     <th>数量</th>
                     <th>总成本</th>
                     <th>平均成本</th>
+                    <th>当前价</th>
                     <th>操作</th>
                   </tr>
                 </thead>
@@ -395,7 +398,7 @@
 
     <script src="app.js"></script>
     <script>
-      if ("serviceWorker" in navigator) {
+      if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
         window.addEventListener("load", () => {
           navigator.serviceWorker.register("./service-worker.js").catch(() => {});
         });

@@ -15,6 +15,25 @@ const state = {
   settings: { ...defaultSettings },
 };
 
+function optionalElement(selector) {
+  return (
+    document.querySelector(selector) || {
+      value: "",
+      textContent: "",
+      innerHTML: "",
+      className: "",
+      addEventListener() {},
+    }
+  );
+}
+
+function uid() {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 const els = {
   navButtons: document.querySelectorAll(".nav-button"),
   views: document.querySelectorAll(".view"),
@@ -36,30 +55,32 @@ const els = {
   previewFee: document.querySelector("#preview-fee"),
   previewNet: document.querySelector("#preview-net"),
   recordsBody: document.querySelector("#records-body"),
-  recordsCards: document.querySelector("#records-cards"),
+  recordsCards: optionalElement("#records-cards"),
   positionsBody: document.querySelector("#positions-body"),
-  positionsCards: document.querySelector("#positions-cards"),
+  positionsCards: optionalElement("#positions-cards"),
   recordFilter: document.querySelector("#record-filter"),
   summaryCount: document.querySelector("#summary-count"),
   insights: document.querySelector("#insights"),
   profitBars: document.querySelector("#profit-bars"),
   assets: document.querySelector("#metric-assets"),
-  totalReturn: document.querySelector("#metric-total-return"),
+  totalReturn: optionalElement("#metric-total-return"),
   cash: document.querySelector("#metric-cash"),
   marketValue: document.querySelector("#metric-market-value"),
   cost: document.querySelector("#metric-cost"),
   floating: document.querySelector("#metric-floating"),
   realized: document.querySelector("#metric-realized"),
   tradePairPnlBody: document.querySelector("#trade-pair-pnl-body"),
-  tradePairPnlCards: document.querySelector("#trade-pair-pnl-cards"),
-  pairStartDate: document.querySelector("#pair-start-date"),
-  pairEndDate: document.querySelector("#pair-end-date"),
+  tradePairPnlCards: optionalElement("#trade-pair-pnl-cards"),
+  pairStartDate: optionalElement("#pair-start-date"),
+  pairEndDate: optionalElement("#pair-end-date"),
   initialCash: document.querySelector("#initial-cash"),
   commissionRate: document.querySelector("#commission-rate"),
   minCommission: document.querySelector("#min-commission"),
   stampRate: document.querySelector("#stamp-rate"),
   transferRate: document.querySelector("#transfer-rate"),
   initialSymbol: document.querySelector("#initial-symbol"),
+  editingInitialId: optionalElement("#editing-initial-id"),
+  initialPositionMode: optionalElement("#initial-position-mode"),
   initialName: document.querySelector("#initial-name"),
   initialQuantity: document.querySelector("#initial-quantity"),
   initialCost: document.querySelector("#initial-cost"),
@@ -418,7 +439,7 @@ function resetForm() {
 function readTradeForm() {
   const existing = state.trades.find((item) => item.id === els.editingId.value);
   return {
-    id: els.editingId.value || crypto.randomUUID(),
+    id: els.editingId.value || uid(),
     date: els.tradeDate.value,
     symbol: normalizeSymbol(els.symbol.value),
     name: els.name.value.trim(),
@@ -710,7 +731,7 @@ function renderSettings() {
   els.transferRate.value = state.settings.transferRate;
 
   if (!state.initialPositions.length) {
-    els.initialPositionsBody.innerHTML = `<tr><td colspan="7" class="empty-state">暂无初始持仓</td></tr>`;
+    els.initialPositionsBody.innerHTML = `<tr><td colspan="8" class="empty-state">暂无初始持仓</td></tr>`;
     return;
   }
 
@@ -724,7 +745,13 @@ function renderSettings() {
           <td>${number(item.quantity, 0)}</td>
           <td>${money(item.cost)}</td>
           <td>${money(item.quantity > 0 ? item.cost / item.quantity : 0)}</td>
-          <td><button class="icon-action" data-delete-initial="${item.id}">删除</button></td>
+          <td>${state.prices[item.symbol] ? money(state.prices[item.symbol]) : "-"}</td>
+          <td>
+            <div class="row-actions">
+              <button class="icon-action" data-edit-initial="${item.id}">编辑</button>
+              <button class="icon-action" data-delete-initial="${item.id}">删除</button>
+            </div>
+          </td>
         </tr>
       `,
     )
@@ -763,9 +790,37 @@ function deleteTrade(id) {
   renderAll();
 }
 
+function resetInitialPositionForm() {
+  els.editingInitialId.value = "";
+  els.initialSymbol.value = "";
+  els.initialName.value = "";
+  els.initialQuantity.value = "";
+  els.initialCost.value = "";
+  els.initialPrice.value = "";
+  els.initialDate.value = today();
+  els.initialPositionMode.textContent = "用于录入开始使用工具之前已经持有的股票";
+  document.querySelector("#add-initial-position").textContent = "添加初始持仓";
+}
+
+function editInitialPosition(id) {
+  const item = state.initialPositions.find((position) => position.id === id);
+  if (!item) return;
+
+  els.editingInitialId.value = item.id;
+  els.initialSymbol.value = item.symbol;
+  els.initialName.value = item.name;
+  els.initialQuantity.value = item.quantity;
+  els.initialCost.value = item.cost;
+  els.initialPrice.value = state.prices[item.symbol] || "";
+  els.initialDate.value = item.date || today();
+  els.initialPositionMode.textContent = "正在编辑初始持仓，保存后会重新计算账户";
+  document.querySelector("#add-initial-position").textContent = "保存初始持仓";
+  setView("settings");
+}
+
 function addInitialPosition() {
   const item = {
-    id: crypto.randomUUID(),
+    id: els.editingInitialId.value || uid(),
     date: els.initialDate.value || today(),
     symbol: normalizeSymbol(els.initialSymbol.value),
     name: els.initialName.value.trim(),
@@ -778,14 +833,12 @@ function addInitialPosition() {
     return;
   }
 
-  state.initialPositions.push(item);
+  const index = state.initialPositions.findIndex((position) => position.id === item.id);
+  if (index >= 0) state.initialPositions[index] = item;
+  else state.initialPositions.push(item);
+
   if (els.initialPrice.value) state.prices[item.symbol] = els.initialPrice.value;
-  els.initialSymbol.value = "";
-  els.initialName.value = "";
-  els.initialQuantity.value = "";
-  els.initialCost.value = "";
-  els.initialPrice.value = "";
-  els.initialDate.value = today();
+  resetInitialPositionForm();
   save();
   renderAll();
 }
@@ -795,7 +848,7 @@ function fillSampleData() {
 
   state.settings.initialCash = state.settings.initialCash || 100000;
   state.initialPositions.push({
-    id: crypto.randomUUID(),
+    id: uid(),
     date: "2026-04-01",
     symbol: "600519",
     name: "贵州茅台",
@@ -804,7 +857,7 @@ function fillSampleData() {
   });
   state.trades.push(
     {
-      id: crypto.randomUUID(),
+      id: uid(),
       date: "2026-04-16",
       symbol: "600519",
       name: "贵州茅台",
@@ -815,7 +868,7 @@ function fillSampleData() {
       createdAt: Date.now(),
     },
     {
-      id: crypto.randomUUID(),
+      id: uid(),
       date: "2026-04-19",
       symbol: "300750",
       name: "宁德时代",
@@ -826,7 +879,7 @@ function fillSampleData() {
       createdAt: Date.now() + 1,
     },
     {
-      id: crypto.randomUUID(),
+      id: uid(),
       date: "2026-04-22",
       symbol: "600519",
       name: "贵州茅台",
@@ -926,6 +979,7 @@ document.querySelector("#save-fees").addEventListener("click", () => {
   renderAll();
 });
 document.querySelector("#add-initial-position").addEventListener("click", addInitialPosition);
+optionalElement("#reset-initial-position").addEventListener("click", resetInitialPositionForm);
 document.querySelector("#clear-data").addEventListener("click", () => {
   if (!confirm("确定清空全部数据吗？")) return;
   state.trades = [];
@@ -984,7 +1038,12 @@ els.positionsCards.addEventListener("change", (event) => {
 });
 
 els.initialPositionsBody.addEventListener("click", (event) => {
+  const editId = event.target.dataset.editInitial;
   const id = event.target.dataset.deleteInitial;
+  if (editId) {
+    editInitialPosition(editId);
+    return;
+  }
   if (!id) return;
   state.initialPositions = state.initialPositions.filter((item) => item.id !== id);
   save();
@@ -993,5 +1052,5 @@ els.initialPositionsBody.addEventListener("click", (event) => {
 
 load();
 resetForm();
-els.initialDate.value = today();
+resetInitialPositionForm();
 renderAll();

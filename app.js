@@ -92,6 +92,7 @@ const els = {
   initialPrice: document.querySelector("#initial-price"),
   initialDate: document.querySelector("#initial-date"),
   initialPositionsBody: document.querySelector("#initial-positions-body"),
+  initialPositionsCards: optionalElement("#initial-positions-cards"),
 };
 
 const titles = {
@@ -929,6 +930,7 @@ function renderSettings() {
 
   if (!state.initialPositions.length) {
     els.initialPositionsBody.innerHTML = `<tr><td colspan="8" class="empty-state">暂无初始持仓</td></tr>`;
+    els.initialPositionsCards.innerHTML = `<div class="empty-state">暂无初始持仓</div>`;
     return;
   }
 
@@ -950,6 +952,30 @@ function renderSettings() {
             </div>
           </td>
         </tr>
+      `,
+    )
+    .join("");
+
+  els.initialPositionsCards.innerHTML = state.initialPositions
+    .map(
+      (item) => `
+        <article class="mobile-card">
+          <div class="mobile-card-head">
+            <strong>${item.name}</strong>
+            <span>${item.symbol}</span>
+          </div>
+          <dl>
+            <div><dt>日期</dt><dd>${item.date || "-"}</dd></div>
+            <div><dt>数量</dt><dd>${number(item.quantity, 0)}</dd></div>
+            <div><dt>总成本</dt><dd>${money(item.cost)}</dd></div>
+            <div><dt>平均成本</dt><dd>${money(item.quantity > 0 ? item.cost / item.quantity : 0)}</dd></div>
+            <div><dt>当前价</dt><dd>${state.prices[item.symbol] ? money(state.prices[item.symbol]) : "-"}</dd></div>
+          </dl>
+          <div class="row-actions">
+            <button class="icon-action" data-edit-initial="${item.id}">编辑</button>
+            <button class="icon-action" data-delete-initial="${item.id}">删除</button>
+          </div>
+        </article>
       `,
     )
     .join("");
@@ -1177,6 +1203,13 @@ document.querySelector("#save-fees").addEventListener("click", () => {
 });
 document.querySelector("#add-initial-position").addEventListener("click", addInitialPosition);
 optionalElement("#reset-initial-position").addEventListener("click", resetInitialPositionForm);
+optionalElement("#clear-initial-positions").addEventListener("click", () => {
+  if (!confirm("确定清空全部初始持仓吗？交易记录不会删除。")) return;
+  state.initialPositions = [];
+  resetInitialPositionForm();
+  save();
+  renderAll();
+});
 optionalElement("#refresh-quotes").addEventListener("click", refreshQuotes);
 document.querySelector("#clear-data").addEventListener("click", () => {
   if (!confirm("确定清空全部数据吗？")) return;
@@ -1236,6 +1269,19 @@ els.positionsCards.addEventListener("change", (event) => {
 });
 
 els.initialPositionsBody.addEventListener("click", (event) => {
+  const editId = event.target.dataset.editInitial;
+  const id = event.target.dataset.deleteInitial;
+  if (editId) {
+    editInitialPosition(editId);
+    return;
+  }
+  if (!id) return;
+  state.initialPositions = state.initialPositions.filter((item) => item.id !== id);
+  save();
+  renderAll();
+});
+
+els.initialPositionsCards.addEventListener("click", (event) => {
   const editId = event.target.dataset.editInitial;
   const id = event.target.dataset.deleteInitial;
   if (editId) {

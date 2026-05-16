@@ -276,6 +276,14 @@ button {
   font-size: 18px;
 }
 
+.panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .panel-header > div h3 {
   margin: 0 0 6px;
 }
@@ -314,6 +322,106 @@ button {
 
 .bar-fill.loss {
   background: var(--buy);
+}
+
+.allocation-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 18px;
+  align-items: center;
+}
+
+.pie-chart {
+  width: 210px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+
+.pie-chart::after {
+  content: "";
+  position: absolute;
+  width: 58%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.pie-chart span {
+  position: relative;
+  z-index: 1;
+  max-width: 112px;
+  text-align: center;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.allocation-list {
+  display: grid;
+  gap: 10px;
+}
+
+.allocation-row {
+  display: grid;
+  grid-template-columns: 12px minmax(80px, 1fr) 58px 100px;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.compact-table table {
+  min-width: 560px;
+}
+
+.equity-chart {
+  width: 100%;
+  min-height: 180px;
+  margin-bottom: 14px;
+}
+
+.equity-chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.equity-grid {
+  fill: none;
+  stroke: #d9e1ea;
+  stroke-width: 2;
+}
+
+.equity-area {
+  fill: rgba(23, 107, 135, 0.14);
+}
+
+.equity-line {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.equity-dot {
+  fill: #ffffff;
+  stroke: var(--primary);
+  stroke-width: 3;
+}
+
+.equity-label {
+  fill: var(--text);
+  font-size: 14px;
+  font-weight: 800;
 }
 
 .insight-list {
@@ -707,10 +815,28 @@ td {
     padding: 14px;
   }
 
+  .allocation-layout {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .allocation-list {
+    width: 100%;
+  }
+
+  .allocation-row {
+    grid-template-columns: 12px minmax(70px, 1fr) 52px 92px;
+  }
+
   .panel-header,
   .form-title {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .panel-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .table-wrap {

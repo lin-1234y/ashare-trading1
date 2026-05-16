@@ -72,29 +72,51 @@
               <strong id="metric-cost">¥0.00</strong>
             </article>
             <article class="metric">
-              <span>浮动盈亏</span>
+              <span>总盈亏</span>
               <strong id="metric-floating">¥0.00</strong>
             </article>
             <article class="metric">
               <span>FIFO已实现盈亏</span>
               <strong id="metric-realized">¥0.00</strong>
             </article>
+            <article class="metric">
+              <span>手续总费</span>
+              <strong id="metric-total-fees">¥0.00</strong>
+            </article>
           </div>
 
           <div class="panel-grid">
             <section class="panel">
               <div class="panel-header">
-                <h3>收益构成</h3>
+                <h3>各股仓位</h3>
                 <span id="summary-count">0 笔交易</span>
               </div>
-              <div class="bar-chart" id="profit-bars"></div>
+              <div class="allocation-layout">
+                <div class="pie-chart" id="allocation-pie"></div>
+                <div class="allocation-list" id="allocation-list"></div>
+              </div>
             </section>
 
             <section class="panel">
               <div class="panel-header">
-                <h3>复盘提示</h3>
+                <h3>资金曲线</h3>
               </div>
-              <ul class="insight-list" id="insights"></ul>
+              <div class="equity-chart" id="equity-chart"></div>
+              <div class="table-wrap compact-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>日期</th>
+                      <th>现金</th>
+                      <th>市值</th>
+                      <th>总资产</th>
+                      <th>总盈亏</th>
+                    </tr>
+                  </thead>
+                  <tbody id="equity-curve-body"></tbody>
+                </table>
+              </div>
+              <div class="mobile-list" id="equity-curve-cards"></div>
             </section>
           </div>
 
@@ -208,7 +230,10 @@
           <section class="panel">
             <div class="panel-header">
               <h3>当前持仓</h3>
-              <span>当前价可手动修改，成本来自初始持仓和FIFO剩余批次</span>
+              <div class="panel-actions">
+                <span id="quote-status">当前价可手动修改</span>
+                <button class="ghost-button small" id="refresh-quotes" type="button">更新股价</button>
+              </div>
             </div>
             <div class="table-wrap">
               <table>

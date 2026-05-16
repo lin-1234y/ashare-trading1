@@ -58,10 +58,14 @@ const els = {
   recordsCards: optionalElement("#records-cards"),
   positionsBody: document.querySelector("#positions-body"),
   positionsCards: optionalElement("#positions-cards"),
+  quoteStatus: optionalElement("#quote-status"),
   recordFilter: document.querySelector("#record-filter"),
   summaryCount: document.querySelector("#summary-count"),
-  insights: document.querySelector("#insights"),
-  profitBars: document.querySelector("#profit-bars"),
+  allocationPie: optionalElement("#allocation-pie"),
+  allocationList: optionalElement("#allocation-list"),
+  equityChart: optionalElement("#equity-chart"),
+  equityCurveBody: optionalElement("#equity-curve-body"),
+  equityCurveCards: optionalElement("#equity-curve-cards"),
   assets: document.querySelector("#metric-assets"),
   totalReturn: optionalElement("#metric-total-return"),
   cash: document.querySelector("#metric-cash"),
@@ -69,6 +73,7 @@ const els = {
   cost: document.querySelector("#metric-cost"),
   floating: document.querySelector("#metric-floating"),
   realized: document.querySelector("#metric-realized"),
+  totalFees: optionalElement("#metric-total-fees"),
   tradePairPnlBody: document.querySelector("#trade-pair-pnl-body"),
   tradePairPnlCards: optionalElement("#trade-pair-pnl-cards"),
   pairStartDate: optionalElement("#pair-start-date"),
@@ -118,6 +123,12 @@ function today() {
 
 function normalizeSymbol(symbol) {
   return String(symbol || "").trim().toUpperCase();
+}
+
+function marketSecid(symbol) {
+  const code = normalizeSymbol(symbol);
+  if (/^(5|6|9)/.test(code)) return `1.${code}`;
+  return `0.${code}`;
 }
 
 function load() {
@@ -301,6 +312,114 @@ function calculatePortfolio(trades = state.trades) {
   });
 
   return { positions, realizedRows, cash };
+}
+
+function uniqueTradeDates() {
+  return [...new Set(state.trades.map((trade) => trade.date))]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function calculateEquityCurve() {
+  const dates = uniqueTradeDates();
+  if (!dates.length) {
+    const now = calculatePortfolio([]);
+    return [
+      {
+        date: "当前",
+        cash: now.cash,
+        marketValue: now.positions.reduce((sum, item) => sum + item.marketValue, 0),
+        assets: now.cash + now.positions.reduce((sum, item) => sum + item.marketValue, 0),
+        pnl: now.positions.reduce((sum, item) => sum + item.floating + item.realized, 0),
+      },
+    ];
+  }
+
+  return dates.map((date) => {
+    const trades = state.trades.filter((trade) => trade.date <= date);
+    const snapshot = calculatePortfolio(trades);
+    const marketValue = snapshot.positions.reduce((sum, item) => sum + item.marketValue, 0);
+    const totalPnl = snapshot.positions.reduce((sum, item) => sum + item.floating + item.realized, 0);
+    return {
+      date,
+      cash: snapshot.cash,
+      marketValue,
+      assets: snapshot.cash + marketValue,
+      pnl: totalPnl,
+    };
+  });
+}
+
+function jsonp(url, callbackName) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    const cleanup = () => {
+      delete window[callbackName];
+      script.remove();
+    };
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("timeout"));
+    }, 10000);
+
+    window[callbackName] = (data) => {
+      window.clearTimeout(timer);
+      cleanup();
+      resolve(data);
+    };
+    script.onerror = () => {
+      window.clearTimeout(timer);
+      cleanup();
+      reject(new Error("network"));
+    };
+    script.src = url;
+    document.body.appendChild(script);
+  });
+}
+
+async function fetchQuote(symbol) {
+  const callbackName = `quote_${normalizeSymbol(symbol)}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const secid = marketSecid(symbol);
+  const url = `https://push2.eastmoney.com/api/qt/stock/get?secid=${encodeURIComponent(secid)}&fields=f43,f57,f58,f152&cb=${callbackName}`;
+  const result = await jsonp(url, callbackName);
+  const data = result && result.data;
+  if (!data || data.f43 === undefined || data.f43 === "-" || data.f43 === null) {
+    throw new Error("empty quote");
+  }
+  const scale = Number(data.f152) || 2;
+  const price = Number(data.f43) / 10 ** scale;
+  return {
+    symbol: data.f57 || normalizeSymbol(symbol),
+    name: data.f58 || "",
+    price,
+  };
+}
+
+async function refreshQuotes() {
+  const { positions } = calculatePortfolio();
+  const symbols = [...new Set(positions.filter((position) => position.quantity > 0).map((position) => position.symbol))];
+
+  if (!symbols.length) {
+    els.quoteStatus.textContent = "暂无持仓可更新";
+    return;
+  }
+
+  els.quoteStatus.textContent = `正在更新 ${symbols.length} 只股票...`;
+  let success = 0;
+  for (const symbol of symbols) {
+    try {
+      const quote = await fetchQuote(symbol);
+      state.prices[symbol] = Number(quote.price.toFixed(3));
+      success += 1;
+    } catch {
+      // Keep the existing manual price when an individual quote fails.
+    }
+  }
+
+  save();
+  renderAll();
+  const time = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  els.quoteStatus.textContent = success ? `已更新 ${success}/${symbols.length}，${time}` : "股价更新失败，可手动输入";
 }
 
 function initialPositionCost() {
@@ -612,6 +731,7 @@ function renderDashboard() {
   const assets = totals.cash + totals.marketValue;
   const initialAssets = (Number(state.settings.initialCash) || 0) + initialPositionCost();
   const totalReturnRate = initialAssets > 0 ? ((assets - initialAssets) / initialAssets) * 100 : 0;
+  const totalPnl = totals.floating + totals.realized;
   const sellCount = state.trades.filter((trade) => trade.side === "sell").length;
   const winCount = realizedRows.filter((row) => row.pnl > 0).length;
   const winRate = sellCount ? (winCount / sellCount) * 100 : 0;
@@ -621,54 +741,131 @@ function renderDashboard() {
   els.cash.textContent = money(totals.cash);
   els.marketValue.textContent = money(totals.marketValue);
   els.cost.textContent = money(totals.cost);
-  els.floating.textContent = money(totals.floating);
+  els.floating.textContent = money(totalPnl);
   els.realized.textContent = money(totals.realized);
+  els.totalFees.textContent = money(totalFees);
   els.totalReturn.className = classByValue(totalReturnRate);
   els.cash.className = classByValue(totals.cash);
-  els.floating.className = classByValue(totals.floating);
+  els.floating.className = classByValue(totalPnl);
   els.realized.className = classByValue(totals.realized);
   els.summaryCount.textContent = `${state.trades.length} 笔交易`;
 
-  const bars = [
-    ["现金", totals.cash],
-    ["市值", totals.marketValue],
-    ["成本", totals.cost],
-    ["浮盈", totals.floating],
-    ["已实现", totals.realized],
-    ["费用", -totalFees],
-  ];
-  const max = Math.max(...bars.map(([, value]) => Math.abs(value)), 1);
-  els.profitBars.innerHTML = bars
-    .map(([label, value]) => {
-      const width = Math.max((Math.abs(value) / max) * 100, value === 0 ? 0 : 4);
+  renderAllocation(positions);
+  renderEquityCurve();
+  renderTradePairPnL();
+}
+
+function renderAllocation(positions) {
+  const open = positions.filter((position) => position.quantity > 0 && position.marketValue > 0);
+  const total = open.reduce((sum, position) => sum + position.marketValue, 0);
+  const colors = ["#176b87", "#c23b42", "#18805f", "#b76e00", "#5a4fcf", "#0f8b8d", "#9b5de5", "#ef476f"];
+
+  if (!open.length || total <= 0) {
+    els.allocationPie.style.background = "#eef3f8";
+    els.allocationPie.innerHTML = `<span>暂无市值</span>`;
+    els.allocationList.innerHTML = `<div class="empty-state">输入持仓当前价后显示仓位饼图</div>`;
+    return;
+  }
+
+  let cursor = 0;
+  const segments = open
+    .sort((a, b) => b.marketValue - a.marketValue)
+    .map((position, index) => {
+      const start = cursor;
+      const percent = (position.marketValue / total) * 100;
+      cursor += percent;
+      return `${colors[index % colors.length]} ${start}% ${cursor}%`;
+    });
+
+  els.allocationPie.style.background = `conic-gradient(${segments.join(", ")})`;
+  els.allocationPie.innerHTML = `<span>${money(total)}</span>`;
+  els.allocationList.innerHTML = open
+    .sort((a, b) => b.marketValue - a.marketValue)
+    .map((position, index) => {
+      const percent = (position.marketValue / total) * 100;
+      const color = colors[index % colors.length];
       return `
-        <div class="bar-row">
-          <span>${label}</span>
-          <div class="bar-track"><div class="bar-fill ${value < 0 ? "loss" : ""}" style="width: ${width}%"></div></div>
-          <strong class="${classByValue(value)}">${money(value)}</strong>
+        <div class="allocation-row">
+          <span class="swatch" style="background: ${color}"></span>
+          <strong>${position.name}</strong>
+          <span>${number(percent, 1)}%</span>
+          <span>${money(position.marketValue)}</span>
         </div>
       `;
     })
     .join("");
+}
 
-  const openPositions = positions.filter((position) => position.quantity > 0);
-  const largest = [...openPositions].sort((a, b) => b.marketValue - a.marketValue)[0];
-  const insights = [];
+function renderEquityCurve() {
+  const chronological = calculateEquityCurve();
+  const rows = chronological.slice(-8).reverse();
+  renderEquityChart(chronological);
 
-  if (!state.trades.length && !state.initialPositions.length) {
-    insights.push("先在设置里录入初始现金和初始持仓，或直接新增一笔买入交易。");
-  } else {
-    insights.push(`当前总资产 ${money(assets)}，总收益率约 ${number(totalReturnRate, 2)}%。`);
-    insights.push(`卖出按 FIFO 结转成本，当前卖出胜率约 ${number(winRate, 1)}%。`);
-    insights.push(`按当前费用规则累计交易费用 ${money(totalFees)}。`);
-    if (largest && totals.marketValue > 0) {
-      const weight = (largest.marketValue / totals.marketValue) * 100;
-      insights.push(`第一大持仓是 ${largest.name}，占持仓市值约 ${number(weight, 1)}%。`);
-    }
+  els.equityCurveBody.innerHTML = rows
+    .map(
+      (row) => `
+        <tr>
+          <td>${row.date}</td>
+          <td>${money(row.cash)}</td>
+          <td>${money(row.marketValue)}</td>
+          <td>${money(row.assets)}</td>
+          <td class="${classByValue(row.pnl)}">${money(row.pnl)}</td>
+        </tr>
+      `,
+    )
+    .join("");
+
+  els.equityCurveCards.innerHTML = rows
+    .map(
+      (row) => `
+        <article class="mobile-card">
+          <div class="mobile-card-head">
+            <strong>${row.date}</strong>
+            <span class="${classByValue(row.pnl)}">${money(row.pnl)}</span>
+          </div>
+          <dl>
+            <div><dt>现金</dt><dd>${money(row.cash)}</dd></div>
+            <div><dt>市值</dt><dd>${money(row.marketValue)}</dd></div>
+            <div><dt>总资产</dt><dd>${money(row.assets)}</dd></div>
+            <div><dt>总盈亏</dt><dd class="${classByValue(row.pnl)}">${money(row.pnl)}</dd></div>
+          </dl>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function renderEquityChart(rows) {
+  if (!rows.length) {
+    els.equityChart.innerHTML = `<div class="empty-state">暂无资金曲线</div>`;
+    return;
   }
 
-  els.insights.innerHTML = insights.map((item) => `<li>${item}</li>`).join("");
-  renderTradePairPnL();
+  const width = 520;
+  const height = 180;
+  const pad = 18;
+  const values = rows.map((row) => row.assets);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(max - min, 1);
+  const points = rows.map((row, index) => {
+    const x = rows.length === 1 ? width / 2 : pad + (index / (rows.length - 1)) * (width - pad * 2);
+    const y = height - pad - ((row.assets - min) / span) * (height - pad * 2);
+    return { x, y, row };
+  });
+  const line = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const area = `${pad},${height - pad} ${line} ${width - pad},${height - pad}`;
+  const last = points[points.length - 1];
+
+  els.equityChart.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="资金曲线">
+      <polyline class="equity-grid" points="${pad},${pad} ${pad},${height - pad} ${width - pad},${height - pad}" />
+      <polygon class="equity-area" points="${area}" />
+      <polyline class="equity-line" points="${line}" />
+      ${points.map((point) => `<circle class="equity-dot" cx="${point.x}" cy="${point.y}" r="3"></circle>`).join("")}
+      <text class="equity-label" x="${Math.min(last.x + 8, width - 130)}" y="${Math.max(last.y - 8, 18)}">${money(last.row.assets)}</text>
+    </svg>
+  `;
 }
 
 function renderTradePairPnL() {
@@ -980,6 +1177,7 @@ document.querySelector("#save-fees").addEventListener("click", () => {
 });
 document.querySelector("#add-initial-position").addEventListener("click", addInitialPosition);
 optionalElement("#reset-initial-position").addEventListener("click", resetInitialPositionForm);
+optionalElement("#refresh-quotes").addEventListener("click", refreshQuotes);
 document.querySelector("#clear-data").addEventListener("click", () => {
   if (!confirm("确定清空全部数据吗？")) return;
   state.trades = [];
@@ -1054,3 +1252,7 @@ load();
 resetForm();
 resetInitialPositionForm();
 renderAll();
+window.setTimeout(refreshQuotes, 800);
+window.setInterval(() => {
+  if (!document.hidden) refreshQuotes();
+}, 60000);

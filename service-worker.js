@@ -1,4 +1,4 @@
-const CACHE_NAME = "ashare-trading-journal-v3";
+const CACHE_NAME = "ashare-trading-journal-v7";
 const ASSETS = [
   "./",
   "./index.html",
